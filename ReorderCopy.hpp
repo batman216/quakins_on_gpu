@@ -105,10 +105,6 @@ namespace quakins {
 			
 			cal_permutation_index<dim> op(order,n_dim);
 
-			std::cout << "device memory cost for one reorder copy buffer is" 
-						<< sizeof(std::size_t)*n_tot/1073741824. 
-						<< "G" << std::endl;	
-	
 			p_idx.resize(n_tot);
 			thrust::transform(idx_s.begin(),idx_s.end(),p_idx.begin(),op);
 
