@@ -43,7 +43,6 @@ int main(int argc, char* argv[]) {
 
 	Timer timer;
 	
-	
 	quakins::CoordinateSystemHost<Real,4>
 					_coord({nx1,nx2,nv1,nv2},
 								 {nx1Ghost,nx2Ghost,0,0},
@@ -86,9 +85,11 @@ int main(int argc, char* argv[]) {
 	quakins::ReorderCopy<Real,4, 
 					thrust::host_vector> copy_h2d(_wf.N,{0,1,3,2});
 	timer.tock();
-
-	copy_h2d(_wf.begin(),test1.begin());
 	
+	timer.tick("transfering data from host to device...");
+	copy_h2d(_wf.begin(),test1.begin());
+	timer.tock();
+		
 	timer.tick("creating device reorder copy...");
 	quakins::ReorderCopy<Real,4, 
 					thrust::device_vector> copy_d2d_1
@@ -102,14 +103,16 @@ int main(int argc, char* argv[]) {
 	std::cout << "main loop start." << std::endl;
 	for (int step=0; step<300; step++) {
 		timer.tick("step"+std::to_string(step));	
-		fbmSolverX1(test1,nx1Tot*nx2Tot*nv2);
+		fbmSolverX1(test1.begin(),nx1Tot*nx2Tot*nv2);
 		copy_d2d_1(test1.begin(),test2.begin());
-		fbmSolverX2(test2,nx1Tot*nx2Tot*nv1);
+		fbmSolverX2(test2.begin(),nx1Tot*nx2Tot*nv1);
 		copy_d2d_2(test2.begin(),test1.begin());
 		timer.tock();
 	}
 	
+	timer.tick("transfering data from device to host...");
   _wf.hVec = test1;
+	timer.tock();
 
 	std::ofstream out("df",std::ios::out);
 	out << _wf.hVec << std::endl;

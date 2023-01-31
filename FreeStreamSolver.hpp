@@ -61,20 +61,20 @@ namespace quakins {
 					alpha = _alpha;  // to device
 			}
 
-			void operator()(thrust::device_vector<val_type> &wf,
+			void operator()(thrust::device_vector<val_type>::iterator iter_begin,
 											std::size_t n_chunk) {
 				std::size_t n_step = nTot/n_chunk;
 				PhiZipIterator phiZipItorPosBegin(thrust::make_tuple(
 													Phi.begin() + nTot/2,
-													wf.begin()-1 + nTot/2,
-													wf.begin() + nTot/2,  
-													wf.begin()+1 +nTot/2  
+													iter_begin-1 + nTot/2,
+													iter_begin + nTot/2,  
+													iter_begin+1 +nTot/2  
 													));
 				PhiZipIterator phiZipItorNegBegin(thrust::make_tuple(
 													Phi.begin(),
-													wf.begin(),
-													wf.begin()+1,  
-													wf.begin()+2  
+													iter_begin,
+													iter_begin+1,  
+													iter_begin+2  
 													));
 				
 				for (std::size_t i = 0; i<n_step/2; i++) {
@@ -102,7 +102,8 @@ namespace quakins {
 
 
 				ZipIterator zipIteratorBegin(thrust::make_tuple(
-																wf.begin(),Phi.begin()-1,Phi.begin()));
+																iter_begin,Phi.begin()-1,Phi.begin()));
+
 				thrust::for_each(zipIteratorBegin+nBd,zipIteratorBegin
 												+nTot-nBd, [](auto tuple) {
 					thrust::get<0>(tuple) += thrust::get<1>(tuple)
