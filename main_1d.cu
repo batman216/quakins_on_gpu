@@ -3,6 +3,7 @@
 #include <cmath>
 #include <fstream>
 #include "FreeStreamSolver.hpp"
+#include "PoissonSolver1D.hpp"
 #include "Timer.h"
 #include "ReorderCopy.hpp"
 #include "reorder_copy.h"

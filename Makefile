@@ -1,4 +1,10 @@
-quakins: main_1d.cu
-	nvc++ -o quakins -std=c++20 -I/opt/nvidia/hpc_sdk/Linux_x86_64/2022/cuda/include main_1d.cu
+EXE = quakins
+CPP = nvc++
+
+CPPFLAG = -std=c++20
+GPUFLAG = -cudalib=cufft -lcufft  -I/opt/nvidia/hpc_sdk/Linux_x86_64/2022/cuda/include
+
+${EXE}: main_1d.cu
+	${CPP} ${CPPFLAG} ${GPUFLAG} $^ -o $@
 clean:
 	rm quakins -f
