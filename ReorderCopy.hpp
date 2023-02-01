@@ -33,9 +33,9 @@ namespace quakins {
 		return idx_m;
 	}
 
-	template<std::size_t dim>
+	template<std::size_t dim,bool piter_on_origin>
 	struct cal_permutation_index {
-		
+	
 		const std::array<std::size_t, dim> order, n_dim;
 	  std::array<std::size_t,dim> n_dim_new;
 
@@ -54,7 +54,8 @@ namespace quakins {
 			std::array<std::size_t,dim> idx_m_new;
 		
 			// take n_dim_new here
-			std::array<std::size_t,dim> idx_m = idxS2M(idx,n_dim_new);
+			std::array<std::size_t,dim> idx_m = 
+					idxS2M(idx,piter_on_origin ? n_dim_new:n_dim);
 
 			auto p_iter = thrust::make_permutation_iterator
 							(idx_m.begin(),order.begin());
@@ -63,7 +64,7 @@ namespace quakins {
 			// take n_dim here, if it is the other way arround, 
 			// the permuation_iterator shall point to the new array 
 			// instead of the original one as is in this case
-			return idxM2S(idx_m_new,n_dim);
+			return idxM2S(idx_m_new,piter_on_origin? n_dim:n_dim_new);
 
 		}
 
@@ -78,6 +79,7 @@ namespace quakins {
 
 	template <typename val_type, 
 					 	std::size_t dim,
+						bool piter_on_origin,
 						template<typename...> typename Container 
 					 >
 #if __cplusplus > 201703L
@@ -97,26 +99,26 @@ namespace quakins {
 			n_tot = thrust::reduce(n_dim.begin(),n_dim.end(),1,
 											thrust::multiplies<std::size_t>());
 			
-			Container<std::size_t> idx_s(n_tot), dim_idx(dim);
 			thrust::counting_iterator<int> iter(0);
-		
-			thrust::copy(iter,iter+idx_s.size(),idx_s.begin());
-			thrust::copy(iter,iter+dim,dim_idx.begin());
 			
-			cal_permutation_index<dim> op(order,n_dim);
+			cal_permutation_index<dim, piter_on_origin> op(order,n_dim);
 
 			p_idx.resize(n_tot);
-			thrust::transform(idx_s.begin(),idx_s.end(),p_idx.begin(),op);
+			thrust::transform(iter,iter+n_tot,p_idx.begin(),op);
 
 		}
 
 		template<typename OutputItor, typename InputItor>
 		void operator()(InputItor inBegin, OutputItor outBegin) {
-
-			auto permutationItor = thrust::make_permutation_iterator(
+			if constexpr(piter_on_origin) {
+				auto permutationItor = thrust::make_permutation_iterator(
 											inBegin,p_idx.begin());
-			thrust::copy(permutationItor, permutationItor+n_tot, outBegin);
-
+				thrust::copy(permutationItor, permutationItor+n_tot, outBegin);
+			} else {
+				auto permutationItor = thrust::make_permutation_iterator(
+											outBegin,p_idx.begin());
+				thrust::copy(inBegin,inBegin+n_tot,permutationItor);
+			}
 		}
 	
 	};

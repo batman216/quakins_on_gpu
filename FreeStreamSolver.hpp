@@ -47,7 +47,7 @@ namespace quakins {
 					nv   = coord.nz[vdim];
 					h    = coord.dz[ndim];
 					nTot = wf.nTot;
-					
+				
 					// prepare the flux function
 					thrust::host_vector<val_type> _Phi(wf.nTot);
 					Phi  = _Phi; //to device
@@ -64,6 +64,7 @@ namespace quakins {
 			void operator()(thrust::device_vector<val_type>::iterator iter_begin,
 											std::size_t n_chunk) {
 				std::size_t n_step = nTot/n_chunk;
+				std::cout << n_step << std::endl;
 				PhiZipIterator phiZipItorPosBegin(thrust::make_tuple(
 													Phi.begin() + nTot/2,
 													iter_begin-1 + nTot/2,
@@ -99,7 +100,6 @@ namespace quakins {
 					});
 					phiZipItorPosBegin += n_chunk;
 				}
-
 
 				ZipIterator zipIteratorBegin(thrust::make_tuple(
 																iter_begin,Phi.begin()-1,Phi.begin()));
