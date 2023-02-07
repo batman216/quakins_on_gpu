@@ -7,6 +7,7 @@
 #include "Timer.h"
 #include "ReorderCopy.hpp"
 #include "reorder_copy.h"
+#include "Integrator.hpp"
 #include <thrust/functional.h>
 #include <thrust/transform.h>
 #include <thrust/sequence.h>
@@ -50,10 +51,10 @@ int main(int argc, char* argv[]) {
 	auto f = [](std::array<Real,2> z) {
 
 		auto fx = [](Real x1) {
-			return std::exp(-std::pow(x1-3,2));
+			return std::cos(2.*M_PI/x1Max*x1);
 		};
 		auto fv = [](Real v1) {
-			return std::exp(-std::pow(v1-2,2)/2.);
+			return std::exp(-std::pow(v1,2)/2.)/std::sqrt(2.*M_PI);
 		};
 
 		return fx(z[0])*fv(z[1]);
@@ -70,6 +71,7 @@ int main(int argc, char* argv[]) {
 
 	timer.tick("requst memory on GPU...");
 	thrust::device_vector<Real> test1(_wf.nTot);
+	thrust::device_vector<Real> test2(_wf.nTot);
 	timer.tock(); 
 
 	timer.tick("creating host reorder copy...");
@@ -84,16 +86,34 @@ int main(int argc, char* argv[]) {
 	timer.tick("creating device reorder copy...");
 	quakins::ReorderCopy<Real,2, true,
 					thrust::device_vector> copy_d2d
-									({nx1Tot,nv1},{0,1});
+									({nx1Tot,nv1},{1,0});
 	timer.tock();
 
-	copy_h2d(_wf.begin(), test1.begin());	
-	std::cout << "main loop start." << std::endl;
+	quakins::Integrator<Real,nv1,
+					thrust::device_vector> integral(v1Min,v1Max);
 
-	for (int step=0; step<300; step++) {
-	//		timer.tick("step"+std::to_string(step));	
-		fbmSolverX1(test1.begin(),nx1Tot);
-	//	timer.tock();
+
+	copy_h2d(_wf.begin(), test1.begin());	
+
+	thrust::device_vector<Real> dens_e(nx1Tot), dens_i(nx1Tot);
+
+	quakins::DensityReducer<Real,nx1Tot,nv1,
+					thrust::device_vector> cal_dens;
+
+	std::cout << "main loop start." << std::endl;
+	for (int step=0; step<1; step++) {
+		timer.tick("step"+std::to_string(step));	
+		//fbmSolverX1(test1.begin(),nx1Tot);
+		copy_d2d(test1.begin(),test2.begin());
+
+  	std::cout << 	integral(test2.begin()) << std::endl;
+
+		cal_dens(integral, test2.begin(), dens_e.begin());
+		thrust::copy(dens_e.begin(), dens_e.end(),
+									std::ostream_iterator<Real>(std::cout," "));
+
+
+		timer.tock();
 	}
 
 	copy_d2h(test1.begin(),_wf.begin());
