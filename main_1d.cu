@@ -7,7 +7,7 @@
 #include "Timer.h"
 #include "ReorderCopy.hpp"
 #include "reorder_copy.h"
-#include "Integrator.hpp"
+#include "DensityReducer.hpp"
 #include <thrust/functional.h>
 #include <thrust/transform.h>
 #include <thrust/sequence.h>
@@ -68,12 +68,6 @@ int main(int argc, char* argv[]) {
 	quakins::fbm::FreeStreamSolver<Real,2,0> 
 					fbmSolverX1(_wf,_coord,dt*.5);	
 
-
-	timer.tick("requst memory on GPU...");
-	thrust::device_vector<Real> test1(_wf.nTot);
-	thrust::device_vector<Real> test2(_wf.nTot);
-	timer.tock(); 
-
 	timer.tick("creating host reorder copy...");
 	quakins::ReorderCopy<Real,2, true,
 				thrust::host_vector> copy_h2d(_wf.N,{0,1});
@@ -88,29 +82,28 @@ int main(int argc, char* argv[]) {
 					thrust::device_vector> copy_d2d
 									({nx1Tot,nv1},{1,0});
 	timer.tock();
-
-	quakins::Integrator<Real,nv1,
-					thrust::device_vector> integral(v1Min,v1Max);
-
-
-	copy_h2d(_wf.begin(), test1.begin());	
+	
+	thrust::device_vector<Real> test1(_wf.nTot);
+	thrust::device_vector<Real> test2(_wf.nTot);
 
 	thrust::device_vector<Real> dens_e(nx1Tot), dens_i(nx1Tot);
 
-	quakins::DensityReducer<Real,nx1Tot,nv1,
-					thrust::device_vector> cal_dens;
+	quakins::DensityReducer<Real,nv1,nx1Tot,
+					thrust::device_vector> cal_dens(v1Min,v1Max);
 
-	std::cout << "main loop start." << std::endl;
-	for (int step=0; step<1; step++) {
-		timer.tick("step"+std::to_string(step));	
+
+	std::cout << "main loop start." 
+	<< std::endl; for (int step=0; step<1; step++) {
+
+		timer.tick("step"+std::to_string(step));
 		//fbmSolverX1(test1.begin(),nx1Tot);
 		copy_d2d(test1.begin(),test2.begin());
 
-  	std::cout << 	integral(test2.begin()) << std::endl;
+		cal_dens(test2.begin(), dens_e.begin());
 
-		cal_dens(integral, test2.begin(), dens_e.begin());
+
 		thrust::copy(dens_e.begin(), dens_e.end(),
-									std::ostream_iterator<Real>(std::cout," "));
+							std::ostream_iterator<Real>(std::cout," "));
 
 
 		timer.tock();
@@ -121,5 +114,10 @@ int main(int argc, char* argv[]) {
 	out << _wf.hVec << std::endl;
 	
 }
+
+
+
+
+
 
 
