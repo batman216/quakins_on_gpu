@@ -14,13 +14,11 @@
 
 using Real = float;
 using Complex = std::complex<Real>;
-using VecH = thrust::host_vector<Real>;
-using VecD = thrust::device_vector<Real>;
 
 
-constexpr std::size_t nx1 = 508;
+constexpr std::size_t nx1 = 500;
 constexpr std::size_t nv1 = 256;
-constexpr std::size_t nx1Ghost = 2;
+constexpr std::size_t nx1Ghost = 6;
 constexpr std::size_t nx1Tot = nx1Ghost*2+nx1;
 
 constexpr Real x1Max =  20;
@@ -60,6 +58,7 @@ int main(int argc, char* argv[]) {
 
 		return fx(z[0])*fv(z[1]);
 	};
+
 	timer.tick("initializing...");
 	quakins::init(_coord,_wf,f); timer.tock();
 	
@@ -100,17 +99,21 @@ int main(int argc, char* argv[]) {
 
 	std::cout << "main loop start." 
 	<< std::endl; for (int step=0; step<500; step++) {
-
+		
 		timer.tick("step"+std::to_string(step));
-		fbmSolverX1(test1.begin(),nx1Tot);
-		copy_d2d_1(test1.begin(),test2.begin());
+		for (int ie=0; ie<10; ie++) {
 
-		cal_dens(test2.begin(), dens_e.begin());
+			fbmSolverX1(test1.begin(),nx1Tot);
+
+			copy_d2d_1(test1.begin(),test2.begin());
+
+			cal_dens(test2.begin(), dens_e.begin());
+
+			copy_d2d_2(test2.begin(),test1.begin());
+
+		} timer.tock();
 
 		rho_out << dens_e;
-
-		copy_d2d_2(test2.begin(),test1.begin());
-		timer.tock();
 	}
 
 	std::ofstream out("df",std::ios::out);

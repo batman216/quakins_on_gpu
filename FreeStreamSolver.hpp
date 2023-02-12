@@ -71,29 +71,14 @@ class strided_chunk_range
 template <typename val_type, std::size_t dim, std::size_t ndim>
 struct FreeStreamSolver {
 	
-	typedef thrust::
-					counting_iterator<std::size_t> CountingIterator;
-	typedef typename thrust::
-					device_vector<val_type>::iterator ValIterator;
-	typedef thrust::tuple<ValIterator, 
-					ValIterator, ValIterator, ValIterator> PhiIteratorTuple;
-	typedef thrust::tuple<ValIterator, 
-						ValIterator, ValIterator> IteratorTuple;
-	typedef thrust::zip_iterator<PhiIteratorTuple> PhiZipIterator;
-	typedef thrust::zip_iterator<IteratorTuple> ZipIterator;
-			
 	std::size_t nx, nv, nBd, nTot, vdim;
 	thrust::device_vector<val_type> Phi; 		// flux function
 	thrust::device_vector<val_type> alpha;	// shift length
-	val_type h;
+	val_type h;  // spactial interval
 
-	FreeStreamSolver(const 
-									WignerFunctionHost
-									<val_type,dim>& wf,
-									 const 
-									CoordinateSystemHost
-									<val_type,dim>& coord,
-									val_type dt) {
+	FreeStreamSolver(const WignerFunctionHost<val_type,dim>& wf,
+	const CoordinateSystemHost<val_type,dim>& coord,val_type dt) {
+
 		nBd  = coord.nBd[ndim];
 		nx   = coord.nz[ndim];
 		vdim = ndim + (dim>>1);
@@ -137,12 +122,14 @@ struct FreeStreamSolver {
 
 
 		// calculate the flux function \Phi
-		PhiZipIterator phiZipItorPosBegin(thrust::make_tuple(
+		auto zitor_pos_begin 
+			= make_zip_iterator(thrust::make_tuple(
 																			Phi.begin() + nTot/2,
 																			itor_begin-1 + nTot/2,
 																			itor_begin + nTot/2,  
 																			itor_begin+1 +nTot/2));
-		PhiZipIterator phiZipItorNegBegin(thrust::make_tuple(
+		auto zitor_neg_begin 
+			=	make_zip_iterator(thrust::make_tuple(
 																			Phi.begin(),
 																			itor_begin,
 																			itor_begin+1,  
@@ -150,32 +137,33 @@ struct FreeStreamSolver {
 
 		for (std::size_t i = 0; i<n_step/2; i++) {
 
-			thrust::for_each(phiZipItorNegBegin+nBd-1,
-											phiZipItorNegBegin+n_chunk-nBd+1,
+			thrust::for_each(zitor_neg_begin+nBd-1,
+											zitor_neg_begin+n_chunk-nBd+1,
 			[a=alpha[i]](auto tuple){
 				thrust::get<0>(tuple) = a*(thrust::get<2>(tuple) 
 				-(1-a)*(1+a)/6*(thrust::get<3>(tuple)-thrust::get<2>(tuple))
 				-(2+a)*(1+a)/6*(thrust::get<2>(tuple)-thrust::get<1>(tuple)));
 			});
-			phiZipItorNegBegin += n_chunk;
+			zitor_neg_begin += n_chunk;
 		} // v < 0
+	
 		for (std::size_t i = n_step/2; i<n_step; i++) {
 
-			thrust::for_each(phiZipItorPosBegin+nBd-1,
-											phiZipItorPosBegin+n_chunk-nBd+1,
+			thrust::for_each(zitor_pos_begin+nBd-1,
+											zitor_pos_begin+n_chunk-nBd+1,
 										[a=alpha[i]](auto tuple){
 				thrust::get<0>(tuple) = a*(thrust::get<2>(tuple) 
 				+(1-a)*(2-a)/6*(thrust::get<3>(tuple)-thrust::get<2>(tuple))
 				+(1-a)*(1+a)/6*(thrust::get<2>(tuple)-thrust::get<1>(tuple)));
 			});
-			phiZipItorPosBegin += n_chunk;
+			zitor_pos_begin += n_chunk;
 		} // v > 0
 
-		ZipIterator zipIteratorBegin(thrust::make_tuple(
+		auto zitor_begin = thrust::make_zip_iterator(thrust::make_tuple(
 														itor_begin,Phi.begin()-1,Phi.begin()));
 
 		// calculate f[i](t+dt)=f[i](t) + Phi[i-1/2] -Phi[i+1/2]
-		thrust::for_each(zipIteratorBegin+nBd,zipIteratorBegin
+		thrust::for_each(zitor_begin+nBd,zitor_begin
 										+nTot-nBd, [](auto tuple) {
 			thrust::get<0>(tuple) += thrust::get<1>(tuple)
 															-thrust::get<2>(tuple);
