@@ -77,4 +77,6 @@ struct CRTP {
     const T& self() const { return static_cast<const T&>(*this); }
 };
 
+
+
 #endif /* _UTIL_HPP_ */

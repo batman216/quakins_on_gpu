@@ -30,9 +30,10 @@ constexpr Real v1Min = -6;
 
 constexpr Real dt = 0.01;
 
-template<typename T>
+template<typename T, 
+		template<typename...> typename Container>
 std::ostream& operator<<(std::ostream& os, 
-		const thrust::host_vector<T>& vec) {
+		const Container<T>& vec) {
 	thrust::copy(vec.begin(),vec.end(),
 		std::ostream_iterator<T>(os," "));
 	return os;
@@ -51,7 +52,7 @@ int main(int argc, char* argv[]) {
 	auto f = [](std::array<Real,2> z) {
 
 		auto fx = [](Real x1) {
-			return std::cos(2.*M_PI/x1Max*x1);
+			return 1.+.1*std::cos(2.*M_PI/x1Max*x1);
 		};
 		auto fv = [](Real v1) {
 			return std::exp(-std::pow(v1,2)/2.)/std::sqrt(2.*M_PI);
@@ -79,39 +80,43 @@ int main(int argc, char* argv[]) {
 		
 	timer.tick("creating device reorder copy...");
 	quakins::ReorderCopy<Real,2, true,
-					thrust::device_vector> copy_d2d
+					thrust::device_vector> copy_d2d_1
 									({nx1Tot,nv1},{1,0});
+	quakins::ReorderCopy<Real,2, true,
+					thrust::device_vector> copy_d2d_2
+									({nv1,nx1Tot},{1,0});
 	timer.tock();
 	
 	thrust::device_vector<Real> test1(_wf.nTot);
 	thrust::device_vector<Real> test2(_wf.nTot);
+	copy_h2d(_wf.begin(),test1.begin());
 
 	thrust::device_vector<Real> dens_e(nx1Tot), dens_i(nx1Tot);
 
 	quakins::DensityReducer<Real,nv1,nx1Tot,
 					thrust::device_vector> cal_dens(v1Min,v1Max);
 
+	std::ofstream rho_out("rho",std::ios::out);
 
 	std::cout << "main loop start." 
-	<< std::endl; for (int step=0; step<1; step++) {
+	<< std::endl; for (int step=0; step<500; step++) {
 
 		timer.tick("step"+std::to_string(step));
-		//fbmSolverX1(test1.begin(),nx1Tot);
-		copy_d2d(test1.begin(),test2.begin());
+		fbmSolverX1(test1.begin(),nx1Tot);
+		copy_d2d_1(test1.begin(),test2.begin());
 
 		cal_dens(test2.begin(), dens_e.begin());
 
+		rho_out << dens_e;
 
-		thrust::copy(dens_e.begin(), dens_e.end(),
-							std::ostream_iterator<Real>(std::cout," "));
-
-
+		copy_d2d_2(test2.begin(),test1.begin());
 		timer.tock();
 	}
 
-	copy_d2h(test1.begin(),_wf.begin());
 	std::ofstream out("df",std::ios::out);
-	out << _wf.hVec << std::endl;
+	thrust::copy(test1.begin(), test1.end(),
+							std::ostream_iterator<Real>(out," "));
+	out << std::endl;
 	
 }
 
