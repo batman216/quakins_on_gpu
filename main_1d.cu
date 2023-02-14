@@ -86,16 +86,23 @@ int main(int argc, char* argv[]) {
 									({nv1,nx1Tot},{1,0});
 	timer.tock();
 	
-	thrust::device_vector<Real> test1(_wf.nTot);
-	thrust::device_vector<Real> test2(_wf.nTot);
-	copy_h2d(_wf.begin(),test1.begin());
+	thrust::device_vector<Real> 
+		ion(_wf.nTot), ion_buf(_wf.nTot),
+		electron(_wf.nTot), electron_buf(_wf.nTot);
+	copy_h2d(_wf.begin(),electron.begin());
 
-	thrust::device_vector<Real> dens_e(nx1Tot), dens_i(nx1Tot);
+	thrust::device_vector<Real> 
+		dens_e(nx1Tot), dens_i(nx1Tot), potential(nx1Tot);
 
 	quakins::DensityReducer<Real,nv1,nx1Tot,
 					thrust::device_vector> cal_dens(v1Min,v1Max);
 
+	quakins::FFTPoissonSolver1D<Real,
+					thrust::device_vector> solvePoisson(nx1,nx1Ghost,x1Max-x1Min);
+
+
 	std::ofstream rho_out("rho",std::ios::out);
+	std::ofstream phi_out("phi",std::ios::out);
 
 	std::cout << "main loop start." 
 	<< std::endl; for (int step=0; step<500; step++) {
@@ -103,21 +110,22 @@ int main(int argc, char* argv[]) {
 		timer.tick("step"+std::to_string(step));
 		for (int ie=0; ie<10; ie++) {
 
-			fbmSolverX1(test1.begin(),nx1Tot);
+			fbmSolverX1(electron.begin(),nx1Tot);
 
-			copy_d2d_1(test1.begin(),test2.begin());
+			copy_d2d_1(electron.begin(),electron_buf.begin());
+			cal_dens(electron_buf.begin(), dens_e.begin());
 
-			cal_dens(test2.begin(), dens_e.begin());
+			solvePoisson(dens_e,potential);
 
-			copy_d2d_2(test2.begin(),test1.begin());
+			copy_d2d_2(electron_buf.begin(),electron.begin());
 
-		} timer.tock();
 
 		rho_out << dens_e;
+		phi_out << potential;
 	}
 
 	std::ofstream out("df",std::ios::out);
-	thrust::copy(test1.begin(), test1.end(),
+	thrust::copy(electron.begin(), electron.end(),
 							std::ostream_iterator<Real>(out," "));
 	out << std::endl;
 	
