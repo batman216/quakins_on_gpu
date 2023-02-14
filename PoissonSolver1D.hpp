@@ -68,7 +68,6 @@ public:
 							1./k_value/k_value/static_cast<val_type>(nint);
 		});
 
-		std::cout << titor[0] << " ";
 		thrust::transform(titor,titor+n,buffer.begin(),
 											buffer.begin(),thrust::multiplies<val_type>());
 		

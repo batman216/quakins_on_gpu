@@ -7,7 +7,7 @@
 #include "WignerFunction.hpp"
 
 namespace quakins {
-
+	
 	template<std::size_t dim>
 	std::size_t idxM2S(std::array<std::size_t,dim> idx_m,
 								 		std::array<std::size_t,dim> N) {

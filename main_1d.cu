@@ -6,6 +6,7 @@
 #include "PoissonSolver1D.hpp"
 #include "Timer.h"
 #include "ReorderCopy.hpp"
+#include "MemSaveReorderCopy.hpp"
 #include "reorder_copy.h"
 #include "DensityReducer.hpp"
 #include <thrust/functional.h>
@@ -20,6 +21,7 @@ constexpr std::size_t nx1 = 500;
 constexpr std::size_t nv1 = 256;
 constexpr std::size_t nx1Ghost = 6;
 constexpr std::size_t nx1Tot = nx1Ghost*2+nx1;
+constexpr std::size_t nTot = nx1Tot*nv1;
 
 constexpr Real x1Max =  20;
 constexpr Real x1Min =  0;
@@ -30,6 +32,13 @@ constexpr Real dt = 0.01;
 
 template<typename T, 
 		template<typename...> typename Container>
+concept isAcontainer = requires (Container<T>& a) {
+	a.begin(); a.end();
+};
+
+template<typename T, 
+		template<typename...> typename Container>
+requires isAcontainer<T,Container>
 std::ostream& operator<<(std::ostream& os, 
 		const Container<T>& vec) {
 	thrust::copy(vec.begin(),vec.end(),
@@ -100,39 +109,35 @@ int main(int argc, char* argv[]) {
 	quakins::FFTPoissonSolver1D<Real,
 					thrust::device_vector> solvePoisson(nx1,nx1Ghost,x1Max-x1Min);
 
+	quakins::MemSaveReorderCopy<Real,2,nTot> copy1({1,0},{nx1Tot,nv1});
+	quakins::MemSaveReorderCopy<Real,2,nTot> copy2({1,0},{nv1,nx1Tot});
 
 	std::ofstream rho_out("rho",std::ios::out);
 	std::ofstream phi_out("phi",std::ios::out);
 
-	std::cout << "main loop start." 
-	<< std::endl; for (int step=0; step<500; step++) {
+	std::cout << "main loop start." << std::endl;
+	for (int step=0; step<100; step++) {
 		
 		timer.tick("step"+std::to_string(step));
 		for (int ie=0; ie<10; ie++) {
 
 			fbmSolverX1(electron.begin(),nx1Tot);
 
-			copy_d2d_1(electron.begin(),electron_buf.begin());
+			copy1(electron.begin(),electron_buf.begin());
 			cal_dens(electron_buf.begin(), dens_e.begin());
 
 			solvePoisson(dens_e,potential);
 
-			copy_d2d_2(electron_buf.begin(),electron.begin());
-
-
+			copy2(electron_buf.begin(),electron.begin());
+		}
+		timer.tock();
 		rho_out << dens_e;
 		phi_out << potential;
 	}
 
 	std::ofstream out("df",std::ios::out);
-	thrust::copy(electron.begin(), electron.end(),
-							std::ostream_iterator<Real>(out," "));
-	out << std::endl;
-	
+	out << electron << std::endl;
 }
-
-
-
 
 
 
