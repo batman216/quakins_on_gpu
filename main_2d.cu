@@ -9,17 +9,17 @@
 #include <thrust/transform.h>
 #include <thrust/sequence.h>
 
-using Real = float;
+using Real = double;
 using Complex = std::complex<Real>;
 using VecH = thrust::host_vector<Real>;
 using VecD = thrust::device_vector<Real>;
 
 
-constexpr std::size_t nx1 = 56;
-constexpr std::size_t nx2 = 50;
-constexpr std::size_t nv1 = 42;
-constexpr std::size_t nv2 = 40;
-constexpr std::size_t nx1Ghost = 2;
+constexpr std::size_t nx1 = 220;
+constexpr std::size_t nx2 = 206;
+constexpr std::size_t nv1 = 82;
+constexpr std::size_t nv2 = 80;
+constexpr std::size_t nx1Ghost = 4;
 constexpr std::size_t nx2Ghost = 2;
 constexpr std::size_t nx1Tot = nx1Ghost*2+nx1;
 constexpr std::size_t nx2Tot = nx2Ghost*2+nx2;
@@ -50,7 +50,15 @@ std::ostream& operator<<(std::ostream& os,
 
 
 int main(int argc, char* argv[]) {
+	cudaSetDevice(1);
 
+	cudaError_t err = cudaDeviceSetLimit(
+					cudaLimitMallocHeapSize, 1048576ULL*1024*3);
+	err = cudaDeviceSetLimit(
+					cudaLimitStackSize, 1048576ULL*1024*4);
+	err = cudaDeviceSetLimit(
+					cudaLimitPrintfFifoSize, 1048576ULL*1024*1);
+		
 
 	Timer timer;
 	
@@ -69,8 +77,8 @@ int main(int argc, char* argv[]) {
 							-std::pow(x2-10,2));	
 		};
 		auto fv = [](Real v1, Real v2) {
-			return std::exp(-std::pow(v1-2,2)/2.
-						-std::pow(v2,2)/2.);	
+			return std::exp(-std::pow(v1+2,2)/2.
+						-std::pow(v2,2)/1.);	
 		};
 
 		return fx(z[0],z[1])*fv(z[2],z[3]);
@@ -90,16 +98,17 @@ int main(int argc, char* argv[]) {
 	quakins::MemSaveReorderCopy<Real,4,nTot>
 					copy2({1,0,3,2},{nx2Tot,nx1Tot,nv1,nv2});
 
+	thrust::device_vector<Real> test1(nTot), test2(nTot);
 	test2 = _wf.hVec;
 
 	copy0(test2.begin(),test1.begin());
 	
 	std::ofstream bout("dfbegin",std::ios::out);
-	bout << test2 << std::endl;
+	//bout << test2 << std::endl;
 
 
 	std::cout << "main loop start." << std::endl;
-	for (int step=0; step<300; step++) {
+	for (int step=0; step<800; step++) {
 		timer.tick("step"+std::to_string(step));	
 
 		fbmSolverX1(test1.begin(),nx1Tot*nx2Tot*nv2);

@@ -77,28 +77,10 @@ int main(int argc, char* argv[]) {
 	quakins::fbm::FreeStreamSolver<Real,2,0> 
 					fbmSolverX1(_wf,_coord,dt*.5);	
 
-	timer.tick("creating host reorder copy...");
-	quakins::ReorderCopy<Real,2, true,
-				thrust::host_vector> copy_h2d(_wf.N,{0,1});
-	quakins::ReorderCopy<Real,2, false, 
-				thrust::host_vector> copy_d2h
-								({nx1Tot,nv1},{0,1});
-	timer.tock();
-	
-		
-	timer.tick("creating device reorder copy...");
-	quakins::ReorderCopy<Real,2, true,
-					thrust::device_vector> copy_d2d_1
-									({nx1Tot,nv1},{1,0});
-	quakins::ReorderCopy<Real,2, true,
-					thrust::device_vector> copy_d2d_2
-									({nv1,nx1Tot},{1,0});
-	timer.tock();
 	
 	thrust::device_vector<Real> 
 		ion(_wf.nTot), ion_buf(_wf.nTot),
 		electron(_wf.nTot), electron_buf(_wf.nTot);
-	copy_h2d(_wf.begin(),electron.begin());
 
 	thrust::device_vector<Real> 
 		dens_e(nx1Tot), dens_i(nx1Tot), potential(nx1Tot);
@@ -114,6 +96,8 @@ int main(int argc, char* argv[]) {
 
 	std::ofstream rho_out("rho",std::ios::out);
 	std::ofstream phi_out("phi",std::ios::out);
+
+	electron = _wf.hVec;
 
 	std::cout << "main loop start." << std::endl;
 	for (int step=0; step<100; step++) {
