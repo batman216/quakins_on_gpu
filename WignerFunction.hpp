@@ -90,10 +90,9 @@ namespace quakins {
 
 	};
 
-	template <typename val_type, 
-					  std::size_t dim,
-						typename f_init>
-	void init(const CoordinateSystemHost<val_type,dim>& coord,
+	template <typename val_type, std::size_t dim,
+					typename f_init, typename Coord>
+	void init(const Coord& coord,
 						WignerFunctionHost<val_type,dim>& wf, f_init f) {
 
 		thrust::counting_iterator<std::size_t> countItor(0);

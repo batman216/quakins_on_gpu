@@ -5,34 +5,10 @@
 #include <thrust/scan.h>
 #include <thrust/inner_product.h>
 #include "WignerFunction.hpp"
+#include "util.hpp"
 
 namespace quakins {
 	
-	template<std::size_t dim>
-	std::size_t idxM2S(std::array<std::size_t,dim> idx_m,
-								 		std::array<std::size_t,dim> N) {
-		std::array<std::size_t,dim> shift;
-		thrust::exclusive_scan(N.begin(),N.end(),shift.begin(),1,
-													thrust::multiplies<std::size_t>());
-
-		return thrust::inner_product(idx_m.begin(),idx_m.end(),
-										shift.begin(),0);
-	}
-
-	template<std::size_t dim>
-	std::array<std::size_t,dim> idxS2M(const std::size_t &idx_s,
-										const std::array<std::size_t,dim>& N) {
-		std::array<std::size_t,dim> idx_m;
-		for (std::size_t i=0; i<dim; i++) {
-			std::size_t imod = thrust::reduce(N.begin(),N.begin()+i+1,
-														1, thrust::multiplies<std::size_t>());
-			std::size_t idvd = thrust::reduce(N.begin(),N.begin()+i,
-														1, thrust::multiplies<std::size_t>());
-			idx_m[i] = (idx_s%imod) / idvd;
-		}
-		return idx_m;
-	}
-
 	template<std::size_t dim,bool piter_on_origin>
 	struct cal_permutation_index {
 	

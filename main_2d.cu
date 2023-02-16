@@ -5,14 +5,13 @@
 #include "FreeStreamSolver.hpp"
 #include "Timer.h"
 #include "MemSaveReorderCopy.hpp"
+#include "PhaseSpaceInitialization.hpp"
 #include <thrust/functional.h>
 #include <thrust/transform.h>
 #include <thrust/sequence.h>
 
-using Real = double;
+using Real = float;
 using Complex = std::complex<Real>;
-using VecH = thrust::host_vector<Real>;
-using VecD = thrust::device_vector<Real>;
 
 
 constexpr std::size_t nx1 = 220;
@@ -32,43 +31,28 @@ constexpr Real v1Min = -6,  v2Min = -6;
 
 constexpr Real dt = 0.01;
 
-template<typename T, 
-		template<typename...> typename Container>
-concept isAcontainer = requires (Container<T>& a) {
-	a.begin(); a.end();
-};
-
-template<typename T, 
-		template<typename...> typename Container>
-requires isAcontainer<T,Container>
-std::ostream& operator<<(std::ostream& os, 
-		const Container<T>& vec) {
-	thrust::copy(vec.begin(),vec.end(),
-		std::ostream_iterator<T>(os," "));
-	return os;
-}
-
 
 int main(int argc, char* argv[]) {
-	cudaSetDevice(1);
-
-	cudaError_t err = cudaDeviceSetLimit(
-					cudaLimitMallocHeapSize, 1048576ULL*1024*3);
-	err = cudaDeviceSetLimit(
-					cudaLimitStackSize, 1048576ULL*1024*4);
-	err = cudaDeviceSetLimit(
-					cudaLimitPrintfFifoSize, 1048576ULL*1024*1);
-		
 
 	Timer timer;
+
+	timer.tick("Asking for GPU memory...");
+	cudaSetDevice(1);
+
+	cudaDeviceSetLimit(
+		cudaLimitMallocHeapSize, 1048576ULL*1024*3);
+	cudaDeviceSetLimit(
+		cudaLimitStackSize, 1048576ULL*1024*3);
+	cudaDeviceSetLimit(
+		cudaLimitPrintfFifoSize, 1048576ULL*1024*3);
+	timer.tock();
 	
-	quakins::CoordinateSystemHost<Real,4>
+	timer.tick("quakins start...");
+	quakins::CoordinateSystem<Real,4>
 					_coord({nx1,nx2,nv1,nv2},
 								 {nx1Ghost,nx2Ghost,0,0},
 								 {x1Min,x1Max,x2Min,x2Max,
 								  v1Min,v1Max,v2Min,v2Max});
-	quakins::WignerFunctionHost<Real,4> 
-			_wf({nx1Tot,nx2Tot,nv1,nv2});
 
 	auto f = [](std::array<Real,4> z) {
 
@@ -83,14 +67,13 @@ int main(int argc, char* argv[]) {
 
 		return fx(z[0],z[1])*fv(z[2],z[3]);
 	};
-	timer.tick("initializing...");
-	quakins::init(_coord,_wf,f); timer.tock();
-	quakins::fbm::FreeStreamSolver<Real,4,0> 
-					fbmSolverX1(_wf,_coord,dt*.5);	
-	quakins::fbm::FreeStreamSolver<Real,4,1> 
-					fbmSolverX2(_wf,_coord,dt*.5);	
+	
 
-		
+	quakins::fbm::FreeStreamSolver<Real,4,0> 
+					fbmSolverX1(_coord,dt*.5);	
+	quakins::fbm::FreeStreamSolver<Real,4,1> 
+					fbmSolverX2(_coord,dt*.5);
+
 	quakins::MemSaveReorderCopy<Real,4,nTot>
 					copy0({0,1,3,2},{nx1Tot,nx2Tot,nv1,nv2});
 	quakins::MemSaveReorderCopy<Real,4,nTot>
@@ -99,12 +82,18 @@ int main(int argc, char* argv[]) {
 					copy2({1,0,3,2},{nx2Tot,nx1Tot,nv1,nv2});
 
 	thrust::device_vector<Real> test1(nTot), test2(nTot);
-	test2 = _wf.hVec;
+
+	timer.tock(); /* quakins start... */
+
+	timer.tick("Phase space initialization...");
+	quakins::PhaseSpaceInitialization<Real,4> init(&_coord);
+	init(test2.begin(),f);
+	timer.tock();
 
 	copy0(test2.begin(),test1.begin());
 	
 	std::ofstream bout("dfbegin",std::ios::out);
-	//bout << test2 << std::endl;
+	bout << test2 << std::endl;
 
 
 	std::cout << "main loop start." << std::endl;

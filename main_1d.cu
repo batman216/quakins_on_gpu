@@ -5,17 +5,15 @@
 #include "FreeStreamSolver.hpp"
 #include "PoissonSolver1D.hpp"
 #include "Timer.h"
-#include "ReorderCopy.hpp"
 #include "MemSaveReorderCopy.hpp"
-#include "reorder_copy.h"
 #include "DensityReducer.hpp"
+#include "PhaseSpaceInitialization.hpp"
 #include <thrust/functional.h>
 #include <thrust/transform.h>
 #include <thrust/sequence.h>
 
 using Real = float;
 using Complex = std::complex<Real>;
-
 
 constexpr std::size_t nx1 = 500;
 constexpr std::size_t nv1 = 256;
@@ -28,35 +26,20 @@ constexpr Real x1Min =  0;
 constexpr Real v1Max =  6;
 constexpr Real v1Min = -6;
 
-constexpr Real dt = 0.01;
+constexpr Real dt = (x1Max-x1Min)/nx1/v1Max/2.3;
 
-template<typename T, 
-		template<typename...> typename Container>
-concept isAcontainer = requires (Container<T>& a) {
-	a.begin(); a.end();
-};
 
-template<typename T, 
-		template<typename...> typename Container>
-requires isAcontainer<T,Container>
-std::ostream& operator<<(std::ostream& os, 
-		const Container<T>& vec) {
-	thrust::copy(vec.begin(),vec.end(),
-		std::ostream_iterator<T>(os," "));
-	return os;
-}
 
 int main(int argc, char* argv[]) {
-
+	cudaSetDevice(1);
+	std::cout << "dt=" << dt << std::endl;
 	Timer timer;
 	
-	quakins::CoordinateSystemHost<Real,2>
+	quakins::CoordinateSystem<Real,2>
 					_coord({nx1,nv1}, {nx1Ghost,0},
 								 {x1Min,x1Max, v1Min,v1Max});
-	quakins::WignerFunctionHost<Real,2> 
-			_wf({nx1Tot,nv1});
 
-	auto f = [](std::array<Real,2> z) {
+	auto f = [](std::array<Real,2> z) -> Real {
 
 		auto fx = [](Real x1) {
 			return 1.+.1*std::cos(2.*M_PI/x1Max*x1);
@@ -65,22 +48,25 @@ int main(int argc, char* argv[]) {
 			return std::exp(-std::pow(v1,2)/2.)/std::sqrt(2.*M_PI);
 		};
 
-		return fx(z[0])*fv(z[1]);
+		return static_cast<Real>(fx(z[0])*fv(z[1]));
 	};
 
-	timer.tick("initializing...");
-	quakins::init(_coord,_wf,f); timer.tock();
-	
-	std::ofstream bout("dfbegin",std::ios::out);
-	bout << _wf.hVec << std::endl;
 
 	quakins::fbm::FreeStreamSolver<Real,2,0> 
-					fbmSolverX1(_wf,_coord,dt*.5);	
-
+					fbmSolverX1(_coord,dt*.5);	
 	
 	thrust::device_vector<Real> 
-		ion(_wf.nTot), ion_buf(_wf.nTot),
-		electron(_wf.nTot), electron_buf(_wf.nTot);
+		ion(nTot), ion_buf(nTot),
+		electron(nTot), electron_buf(nTot);
+	
+	timer.tick("Phase space initialization...")
+	quakins::PhaseSpaceInitialization<Real,2> init(&_coord);
+	init(electron.begin(),f);
+	timer.tock();
+
+	std::ofstream bout("dfbegin",std::ios::out);
+	bout << electron << std::endl;
+
 
 	thrust::device_vector<Real> 
 		dens_e(nx1Tot), dens_i(nx1Tot), potential(nx1Tot);
@@ -97,7 +83,6 @@ int main(int argc, char* argv[]) {
 	std::ofstream rho_out("rho",std::ios::out);
 	std::ofstream phi_out("phi",std::ios::out);
 
-	electron = _wf.hVec;
 
 	std::cout << "main loop start." << std::endl;
 	for (int step=0; step<100; step++) {

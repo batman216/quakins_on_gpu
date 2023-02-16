@@ -76,18 +76,18 @@ struct FreeStreamSolver {
 	thrust::device_vector<val_type> alpha;	// shift length
 	val_type h;  // spactial interval
 
-	FreeStreamSolver(const WignerFunctionHost<val_type,dim>& wf,
-	const CoordinateSystemHost<val_type,dim>& coord,val_type dt) {
+	FreeStreamSolver(const CoordinateSystem<val_type,dim>& coord,val_type dt) {
 
 		nBd  = coord.nBd[ndim];
 		nx   = coord.nz[ndim];
 		vdim = ndim + (dim>>1);
 		nv   = coord.nz[vdim];
 		h    = coord.dz[ndim];
-		nTot = wf.nTot;
+		nTot = thrust::reduce(coord.nzTot.begin(), coord.nzTot.end(),1,
+													thrust::multiplies<std::size_t>());
 		
 		// prepare the flux function
-		thrust::host_vector<val_type> _Phi(wf.nTot);
+		thrust::host_vector<val_type> _Phi(nTot);
 		Phi  = _Phi; //to device
 
 		// calculate shift wihtin dt
