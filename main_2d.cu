@@ -6,6 +6,7 @@
 #include "Timer.h"
 #include "MemSaveReorderCopy.hpp"
 #include "PhaseSpaceInitialization.hpp"
+#include "DensityReducer.hpp"
 #include <thrust/functional.h>
 #include <thrust/transform.h>
 #include <thrust/sequence.h>
@@ -13,13 +14,14 @@
 using Real = float;
 using Complex = std::complex<Real>;
 
+constexpr std::size_t DIM = 4;
 
-constexpr std::size_t nx1 = 220;
-constexpr std::size_t nx2 = 206;
-constexpr std::size_t nv1 = 82;
-constexpr std::size_t nv2 = 80;
+constexpr std::size_t nx1 = 100;
+constexpr std::size_t nx2 = 80;
+constexpr std::size_t nv1 = 66;
+constexpr std::size_t nv2 = 60;
 constexpr std::size_t nx1Ghost = 4;
-constexpr std::size_t nx2Ghost = 2;
+constexpr std::size_t nx2Ghost = 4;
 constexpr std::size_t nx1Tot = nx1Ghost*2+nx1;
 constexpr std::size_t nx2Tot = nx2Ghost*2+nx2;
 constexpr std::size_t nTot = nx1Tot*nx2Tot*nv1*nv2;
@@ -48,13 +50,13 @@ int main(int argc, char* argv[]) {
 	timer.tock();
 	
 	timer.tick("quakins start...");
-	quakins::CoordinateSystem<Real,4>
+	quakins::CoordinateSystem<Real,DIM>
 					_coord({nx1,nx2,nv1,nv2},
 								 {nx1Ghost,nx2Ghost,0,0},
 								 {x1Min,x1Max,x2Min,x2Max,
 								  v1Min,v1Max,v2Min,v2Max});
 
-	auto f = [](std::array<Real,4> z) {
+	auto f = [](std::array<Real,DIM> z) {
 
 		auto fx = [](Real x1, Real x2) {
 			return std::exp(-std::pow(x1-3,2)
@@ -69,35 +71,44 @@ int main(int argc, char* argv[]) {
 	};
 	
 
-	quakins::fbm::FreeStreamSolver<Real,4,0> 
+	quakins::fbm::FreeStreamSolver<Real,DIM,0> 
 					fbmSolverX1(_coord,dt*.5);	
-	quakins::fbm::FreeStreamSolver<Real,4,1> 
+	quakins::fbm::FreeStreamSolver<Real,DIM,1> 
 					fbmSolverX2(_coord,dt*.5);
 
-	quakins::MemSaveReorderCopy<Real,4,nTot>
+	quakins::MemSaveReorderCopy<Real,DIM,nTot>
 					copy0({0,1,3,2},{nx1Tot,nx2Tot,nv1,nv2});
-	quakins::MemSaveReorderCopy<Real,4,nTot>
+	quakins::MemSaveReorderCopy<Real,DIM,nTot>
 					copy1({1,0,3,2},{nx1Tot,nx2Tot,nv2,nv1});
-	quakins::MemSaveReorderCopy<Real,4,nTot>
-					copy2({1,0,3,2},{nx2Tot,nx1Tot,nv1,nv2});
+	quakins::MemSaveReorderCopy<Real,DIM,nTot>
+					copy2({2,3,1,0},{nx2Tot,nx1Tot,nv1,nv2});
+	quakins::MemSaveReorderCopy<Real,DIM,nTot>
+					copy3({2,3,1,0},{nv1,nv2,nx1Tot,nx2Tot});
+
 
 	thrust::device_vector<Real> test1(nTot), test2(nTot);
+	thrust::device_vector<Real> dens_e(nx1Tot*nx2Tot), 
+															dens_e_buf(nx1Tot*nx2Tot*nv2);
+
+	quakins::DensityReducer<Real,nv1,nx1Tot*nx2Tot*nv2,
+		thrust::device_vector> cal_dens_1(v1Min,v1Max);
+	quakins::DensityReducer<Real,nv2,nx1Tot*nx2Tot,
+		thrust::device_vector> cal_dens_2(v2Min,v2Max);
+
 
 	timer.tock(); /* quakins start... */
 
 	timer.tick("Phase space initialization...");
-	quakins::PhaseSpaceInitialization<Real,4> init(&_coord);
+	quakins::PhaseSpaceInitialization<Real,DIM> init(&_coord);
 	init(test2.begin(),f);
 	timer.tock();
 
 	copy0(test2.begin(),test1.begin());
 	
-	std::ofstream bout("dfbegin",std::ios::out);
-	bout << test2 << std::endl;
-
+	std::ofstream rho_out("rho",std::ios::out);
 
 	std::cout << "main loop start." << std::endl;
-	for (int step=0; step<800; step++) {
+	for (std::size_t step=0; step<400; step++) {
 		timer.tick("step"+std::to_string(step));	
 
 		fbmSolverX1(test1.begin(),nx1Tot*nx2Tot*nv2);
@@ -108,6 +119,14 @@ int main(int argc, char* argv[]) {
 		
 		copy2(test2.begin(),test1.begin());
 		
+		cal_dens_1(test1.begin(),dens_e_buf.begin());
+		cal_dens_2(dens_e_buf.begin(),dens_e.begin());
+		
+		if (step%10==0)
+			rho_out << dens_e << std::endl;
+
+		copy3(test1.begin(),test2.begin());
+		test1 = test2;
 		timer.tock();
 	}
 

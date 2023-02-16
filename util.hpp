@@ -6,6 +6,9 @@
 #include <map>
 #include <memory>
 
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/permutation_iterator.h>
 
 // dynamic polyorphism
 template <typename t_Product> 
@@ -79,7 +82,7 @@ struct CRTP {
 
 
 
-
+// print thrust vector
 template<typename T, 
 		template<typename...> typename Container>
 concept isThrustContainer =
@@ -96,7 +99,23 @@ std::ostream& operator<<(std::ostream& os,
 	return os;
 }
 
+// sparse print thrust vector
+template<typename Iterator>
+void sparse_print(std::ofstream& os, Iterator itor_begin, 
+									std::size_t nTot, std::size_t stride) {
 
+	auto pitor_begin = thrust::make_permutation_iterator(itor_begin,
+			thrust::make_transform_iterator(
+					thrust::make_counting_iterator(0),
+						[stride](int idx){ return idx*stride; }));
+
+	thrust::copy(pitor_begin,pitor_begin+nTot/stride,
+								std::ostream_iterator<float>(os," "));
+	
+}
+
+
+// multi-array indices operations
 template<std::size_t dim>
 std::size_t idxM2S(std::array<std::size_t,dim> idx_m,
 							 		std::array<std::size_t,dim> N) {
